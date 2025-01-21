@@ -27,10 +27,10 @@ class MainActivity : AppCompatActivity() {
         private val paint = Paint()
         private var running = true
         private var score = 0
+        private var isFirstWave = true // Flag to skip the first wave
 
         init {
             holder.addCallback(this)
-            resetGame() // Initialize game state
             fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {
                 if (running) updateGame()
             }
@@ -70,21 +70,31 @@ class MainActivity : AppCompatActivity() {
             synchronized(enemies) { enemies.clear() }
             synchronized(projectiles) { projectiles.clear() }
             score = 0
-            spawnEnemies()
+            isFirstWave = true // Reset the flag for the next game
         }
+
+// ... (rest of the MainActivity code remains the same)
 
         private fun spawnEnemies() {
             synchronized(enemies) {
                 enemies.clear()
                 val numEnemies = 5
-                val spacing = width / numEnemies
+                val spacing = (width - (numEnemies * 100f)) / (numEnemies - 1) // Calculate spacing considering enemy width
+
                 for (i in 0 until numEnemies) {
-                    enemies.add(Enemy((i * spacing + spacing / 2).toFloat(), 200f))
+                    enemies.add(Enemy(50f + i * spacing, 200f)) // Start from 50f to avoid immediate edge collision
                 }
             }
         }
 
+// ... (rest of the MainActivity code)
+
         private fun updateGame() {
+            if (isFirstWave) {
+                spawnEnemies()
+                isFirstWave = false
+            }
+
             synchronized(enemies) {
                 synchronized(projectiles) {
                     // Move projectiles
@@ -161,7 +171,8 @@ class MainActivity : AppCompatActivity() {
 
             fun move() {
                 x += direction
-                if (x < 50 || x > width - 50) direction = -direction
+                if (x < 50) direction = 5
+                else if (x > width - 50) direction = -5
             }
         }
     }
