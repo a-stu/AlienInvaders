@@ -11,6 +11,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.concurrent.fixedRateTimer
+import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
 
@@ -28,6 +29,8 @@ class MainActivity : AppCompatActivity() {
         private var running = true
         private var score = 0
         private var isFirstWave = true // Flag to skip the first wave
+        private var waveCount = 0 // Track the number of waves spawned
+
 
         init {
             holder.addCallback(this)
@@ -73,28 +76,27 @@ class MainActivity : AppCompatActivity() {
             isFirstWave = true // Reset the flag for the next game
         }
 
-// ... (rest of the MainActivity code remains the same)
-
         private fun spawnEnemies() {
             synchronized(enemies) {
                 enemies.clear()
                 val numEnemies = 5
-                val spacing = (width - (numEnemies * 100f)) / (numEnemies - 1) // Calculate spacing considering enemy width
+                val enemyWidth = 100f
+                val availableSpace = width - (numEnemies * enemyWidth)
+                val spacing = availableSpace / (numEnemies - 1)
 
                 for (i in 0 until numEnemies) {
-                    enemies.add(Enemy(50f + i * spacing, 200f)) // Start from 50f to avoid immediate edge collision
+                    val centerX = spacing * i + enemyWidth / 2 + i * enemyWidth
+                    val y = Random.nextFloat() * (height / 3 - 150) + 75
+                    val enemy = Enemy(centerX, y, 50f, width - 50f)
+                    enemies.add(enemy)
                 }
+
+                // Increment wave count after successfully spawning enemies
+                waveCount += 1
             }
         }
 
-// ... (rest of the MainActivity code)
-
         private fun updateGame() {
-            if (isFirstWave) {
-                spawnEnemies()
-                isFirstWave = false
-            }
-
             synchronized(enemies) {
                 synchronized(projectiles) {
                     // Move projectiles
@@ -106,13 +108,20 @@ class MainActivity : AppCompatActivity() {
                     // Remove off-screen projectiles
                     projectiles.removeAll { it.y < 0 }
 
+                    // Automatically clear the first wave
+                    if (waveCount == 1) {
+                        enemies.clear() // Clear the first wave
+                        waveCount += 1 // Increment to avoid repeating
+                        return
+                    }
+
                     // Check collisions
                     val enemiesToRemove = mutableListOf<Enemy>()
                     enemies.forEach { enemy ->
                         if (projectiles.any { it.collidesWith(enemy) }) {
                             projectiles.removeIf { it.collidesWith(enemy) }
                             enemiesToRemove.add(enemy)
-                            score += 1 // Increment score
+                            score += 1
                         }
                     }
 
@@ -124,28 +133,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+
         private fun drawGame(canvas: Canvas) {
             synchronized(enemies) {
                 synchronized(projectiles) {
                     canvas.drawColor(Color.BLACK)
 
-                    // Draw player
                     paint.color = Color.GREEN
-                    canvas.drawRect(player.x - 50, height - 150f, player.x + 50, height - 100f, paint)
+                    canvas.drawRect(
+                        player.x - 50,
+                        height - 150f,
+                        player.x + 50,
+                        height - 100f,
+                        paint
+                    )
 
-                    // Draw projectiles
                     paint.color = Color.YELLOW
                     projectiles.forEach {
                         canvas.drawRect(it.x - 10, it.y - 20, it.x + 10, it.y, paint)
                     }
 
-                    // Draw enemies
                     paint.color = Color.RED
                     enemies.forEach {
                         canvas.drawRect(it.x - 50, it.y - 50, it.x + 50, it.y + 50, paint)
                     }
 
-                    // Draw score
                     paint.color = Color.WHITE
                     paint.textSize = 60f
                     paint.typeface = Typeface.MONOSPACE
@@ -154,7 +166,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        inner class Player(var x: Float = 0f)
+        inner class Player(var x: Float = width / 2f)
 
         inner class Projectile(var x: Float, var y: Float) {
             fun move() {
@@ -166,13 +178,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        inner class Enemy(var x: Float, var y: Float) {
-            private var direction = 5
+        inner class Enemy(var x: Float, var y: Float, private val minX: Float, private val maxX: Float) {
+            private var speedX = Random.nextFloat() * 10 - 5
+            private var speedY = Random.nextFloat() * 10 - 5
 
             fun move() {
-                x += direction
-                if (x < 50) direction = 5
-                else if (x > width - 50) direction = -5
+                x += speedX
+                y += speedY
+
+                if (x < minX) {
+                    x = minX
+                    speedX = -speedX
+                } else if (x > maxX) {
+                    x = maxX
+                    speedX = -speedX
+                }
+
+                if (y < 50 || y > height - 150) {
+                    speedY = -speedY
+                    randomizeDirection()
+                }
+            }
+
+            private fun randomizeDirection() {
+                speedX += Random.nextFloat() * 4 - 2
+                speedY += Random.nextFloat() * 4 - 2
+
+                if (speedX < 3 && speedX > -3) speedX += if (speedX > 0) 2 else -2
+                if (speedY < 3 && speedY > -3) speedY += if (speedY > 0) 2 else -2
             }
         }
     }
