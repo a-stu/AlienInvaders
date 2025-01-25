@@ -1,6 +1,7 @@
 package com.example.alieninvaders
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -27,20 +28,27 @@ class MainActivity : AppCompatActivity() {
         private val enemies = mutableListOf<Enemy>()
         private val paint = Paint()
         private var running = true
+        private var gameOver = false
         private var score = 0
-        private var isFirstWave = true // Flag to skip the first wave
-        private var waveCount = 0 // Track the number of waves spawned
-
+        private var waveCount = 0
+        private var gameLoopThread: Thread? = null
+        private var gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {}
 
         init {
             holder.addCallback(this)
-            fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {
+            startGameLoop()
+        }
+
+        private fun startGameLoop() {
+            gameLoopTimer.cancel()
+            gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {
                 if (running) updateGame()
             }
         }
 
         override fun surfaceCreated(holder: SurfaceHolder) {
-            Thread {
+            player.x = width / 2f
+            gameLoopThread = Thread {
                 while (running) {
                     val canvas = holder.lockCanvas()
                     if (canvas != null) {
@@ -50,20 +58,29 @@ class MainActivity : AppCompatActivity() {
                         holder.unlockCanvasAndPost(canvas)
                     }
                 }
-            }.start()
+            }.apply { start() }
         }
 
         override fun surfaceDestroyed(holder: SurfaceHolder) {
             running = false
+            gameLoopTimer.cancel()
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
 
         override fun onTouchEvent(event: MotionEvent?): Boolean {
             if (event?.action == MotionEvent.ACTION_DOWN) {
-                player.x = event.x
-                synchronized(projectiles) {
-                    projectiles.add(Projectile(player.x, height.toFloat() - 200))
+                if (gameOver) {
+                    running = false
+                    gameLoopTimer.cancel()
+                    val intent = Intent(context, StartScreenActivity::class.java)
+                    context.startActivity(intent)
+                    (context as MainActivity).finish()
+                } else {
+                    player.x = event.x
+                    synchronized(projectiles) {
+                        projectiles.add(Projectile(player.x, height.toFloat() - 200))
+                    }
                 }
             }
             return true
@@ -73,7 +90,8 @@ class MainActivity : AppCompatActivity() {
             synchronized(enemies) { enemies.clear() }
             synchronized(projectiles) { projectiles.clear() }
             score = 0
-            isFirstWave = true // Reset the flag for the next game
+            gameOver = false
+            player.x = width / 2f
         }
 
         private fun spawnEnemies() {
@@ -91,31 +109,25 @@ class MainActivity : AppCompatActivity() {
                     enemies.add(enemy)
                 }
 
-                // Increment wave count after successfully spawning enemies
                 waveCount += 1
             }
         }
 
         private fun updateGame() {
+            if (gameOver) return
+
             synchronized(enemies) {
                 synchronized(projectiles) {
-                    // Move projectiles
                     projectiles.forEach { it.move() }
-
-                    // Move enemies
                     enemies.forEach { it.move() }
-
-                    // Remove off-screen projectiles
                     projectiles.removeAll { it.y < 0 }
 
-                    // Automatically clear the first wave
                     if (waveCount == 1) {
-                        enemies.clear() // Clear the first wave
-                        waveCount += 1 // Increment to avoid repeating
+                        enemies.clear()
+                        waveCount += 1
                         return
                     }
 
-                    // Check collisions
                     val enemiesToRemove = mutableListOf<Enemy>()
                     enemies.forEach { enemy ->
                         if (projectiles.any { it.collidesWith(enemy) }) {
@@ -123,22 +135,48 @@ class MainActivity : AppCompatActivity() {
                             enemiesToRemove.add(enemy)
                             score += 1
                         }
+                        if (enemy.collidesWithPlayer(player)) {
+                            gameOver = true
+                        }
                     }
 
                     enemies.removeAll(enemiesToRemove)
-
-                    // Respawn enemies if all are destroyed
-                    if (enemies.isEmpty()) spawnEnemies()
+                    if (enemies.isEmpty() && !gameOver) spawnEnemies()
                 }
             }
         }
-
 
         private fun drawGame(canvas: Canvas) {
             synchronized(enemies) {
                 synchronized(projectiles) {
                     canvas.drawColor(Color.BLACK)
 
+                    if (gameOver) {
+                        // Draw "GAME OVER" text
+                        paint.color = Color.RED
+                        paint.textSize = 100f
+                        paint.typeface = Typeface.DEFAULT_BOLD
+                        val gameOverText = "GAME OVER"
+                        val gameOverWidth = paint.measureText(gameOverText)
+                        canvas.drawText(gameOverText, (width - gameOverWidth) / 2, height / 2f, paint)
+
+                        // Draw "Score: X" text
+                        paint.color = Color.YELLOW
+                        paint.textSize = 50f
+                        val scoreText = "Score: $score"
+                        val scoreWidth = paint.measureText(scoreText)
+                        canvas.drawText(scoreText, (width - scoreWidth) / 2, height / 2f + 100, paint)
+
+                        // Draw "-tap here to reset-" text
+                        paint.color = Color.WHITE
+                        val resetText = "-tap here to reset-"
+                        val resetWidth = paint.measureText(resetText)
+                        canvas.drawText(resetText, (width - resetWidth) / 2, height / 2f + 200, paint)
+
+                        return
+                    }
+
+                    // Normal game drawing
                     paint.color = Color.GREEN
                     canvas.drawRect(
                         player.x - 50,
@@ -166,7 +204,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        inner class Player(var x: Float = width / 2f)
+
+        inner class Player(var x: Float = 0f)
 
         inner class Projectile(var x: Float, var y: Float) {
             fun move() {
@@ -196,16 +235,22 @@ class MainActivity : AppCompatActivity() {
 
                 if (y < 50 || y > height - 150) {
                     speedY = -speedY
-                    randomizeDirection()
                 }
             }
 
-            private fun randomizeDirection() {
-                speedX += Random.nextFloat() * 4 - 2
-                speedY += Random.nextFloat() * 4 - 2
+            fun collidesWithPlayer(player: Player): Boolean {
+                val playerLeft = player.x - 50
+                val playerRight = player.x + 50
+                val playerTop = height - 150f
+                val playerBottom = height - 100f
 
-                if (speedX < 3 && speedX > -3) speedX += if (speedX > 0) 2 else -2
-                if (speedY < 3 && speedY > -3) speedY += if (speedY > 0) 2 else -2
+                val enemyLeft = x - 50
+                val enemyRight = x + 50
+                val enemyTop = y - 50
+                val enemyBottom = y + 50
+
+                return playerRight > enemyLeft && playerLeft < enemyRight &&
+                        playerBottom > enemyTop && playerTop < enemyBottom
             }
         }
     }
