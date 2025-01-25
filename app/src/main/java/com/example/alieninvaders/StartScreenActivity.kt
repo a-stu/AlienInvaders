@@ -26,11 +26,16 @@ class StartScreenActivity : AppCompatActivity() {
         }
 
         override fun surfaceCreated(holder: SurfaceHolder) {
-            val canvas = holder.lockCanvas()
-            if (canvas != null) {
-                drawScreen(canvas)
-                holder.unlockCanvasAndPost(canvas)
-            }
+            // Ensure drawing the start screen on creation
+            Thread {
+                val canvas = holder.lockCanvas()
+                if (canvas != null) {
+                    synchronized(holder) {
+                        drawScreen(canvas)
+                    }
+                    holder.unlockCanvasAndPost(canvas)
+                }
+            }.start()
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
@@ -39,7 +44,6 @@ class StartScreenActivity : AppCompatActivity() {
 
         override fun onTouchEvent(event: MotionEvent?): Boolean {
             if (event?.action == MotionEvent.ACTION_DOWN) {
-                // Handle touch event (e.g., start the game)
                 performClick() // Notify accessibility services
                 onGameStart()
                 return true
@@ -49,12 +53,11 @@ class StartScreenActivity : AppCompatActivity() {
 
         override fun performClick(): Boolean {
             super.performClick()
-            // Additional logic, if any
             return true
         }
 
         private fun onGameStart() {
-            // Transition to MainActivity
+            // Transition to MainActivity when the screen is tapped
             val intent = Intent(context, MainActivity::class.java)
             context.startActivity(intent)
         }
@@ -62,7 +65,7 @@ class StartScreenActivity : AppCompatActivity() {
         private fun drawScreen(canvas: Canvas) {
             canvas.drawColor(Color.BLACK)
 
-            // Draw the title
+            // Draw the game title
             paint.color = Color.WHITE
             paint.textSize = 100f
             paint.textAlign = Paint.Align.CENTER
@@ -72,19 +75,20 @@ class StartScreenActivity : AppCompatActivity() {
             paint.textSize = 50f
             canvas.drawText("by addison stuart", (width / 2).toFloat(), (height / 4 + 70).toFloat(), paint)
 
-            // Draw the tap-to-start text
+            // Draw "Tap to Start" text
             paint.textSize = 60f
             canvas.drawText("-tap here to start-", (width / 2).toFloat(), (3 * height / 4).toFloat(), paint)
 
-            // Draw enemy blocks at the top, centered horizontally
+            // Draw enemy blocks at the top
             paint.color = Color.RED
             val numEnemies = 5
             val enemyWidth = 100
-            val totalEnemyWidth = numEnemies * enemyWidth
-            val startX = (width - totalEnemyWidth) / 2
+            val spacing = 20 // Spacing between enemy blocks
+            val totalWidth = numEnemies * (enemyWidth + spacing) - spacing
+            val startX = (width - totalWidth) / 2
 
             for (i in 0 until numEnemies) {
-                val left = startX + i * enemyWidth
+                val left = startX + i * (enemyWidth + spacing)
                 canvas.drawRect(
                     left.toFloat(),
                     50f,
@@ -94,7 +98,7 @@ class StartScreenActivity : AppCompatActivity() {
                 )
             }
 
-            // Draw player block at the bottom
+            // Draw the player block at the bottom
             paint.color = Color.GREEN
             val playerWidth = 200
             canvas.drawRect(
@@ -105,6 +109,5 @@ class StartScreenActivity : AppCompatActivity() {
                 paint
             )
         }
-
-        }
     }
+}
