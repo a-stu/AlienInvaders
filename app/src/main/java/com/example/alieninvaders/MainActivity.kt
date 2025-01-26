@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
                     val currentTime = System.currentTimeMillis()
 
                     // Firing Speed: Check if enough time (500ms) has passed since the last shot
-                    if (currentTime - lastShotTime >= 500) {
+                    if (currentTime - lastShotTime >= 400) {
                         synchronized(projectiles) {
                             projectiles.add(Projectile(player.x, height.toFloat() - 200))
                         }
@@ -104,7 +104,7 @@ class MainActivity : AppCompatActivity() {
         private fun spawnEnemies() {
             synchronized(enemies) {
                 enemies.clear()
-                val numEnemies = 5
+                val numEnemies = 5 + (waveCount - 1) // Wave 1 starts with 5 enemies
                 val enemyWidth = 100f
                 val availableSpace = width - (numEnemies * enemyWidth)
                 val spacing = availableSpace / (numEnemies - 1)
@@ -116,9 +116,14 @@ class MainActivity : AppCompatActivity() {
                     enemies.add(enemy)
                 }
 
-                waveCount += 1
+                waveCount += 1 // Increment wave count
+                increaseEnemySpeed() // Apply the speed increase to the new wave
             }
         }
+
+
+
+        private var lastScoreCheckpoint = 0 // Tracks the last score checkpoint for speed increases
 
         private fun updateGame() {
             if (gameOver) return
@@ -141,9 +146,36 @@ class MainActivity : AppCompatActivity() {
                             projectiles.removeIf { it.collidesWith(enemy) }
                             enemiesToRemove.add(enemy)
                             score += 1
+
+                            // Increase enemy speed every 5 points
+                            if (score % 5 == 0 && score > lastScoreCheckpoint) {
+                                lastScoreCheckpoint = score
+                                increaseEnemySpeed()
+                            }
                         }
-                        if (enemy.collidesWithPlayer(player)) {
+
+                        // Check for collision with the player
+                        val playerLeft = player.x - 50
+                        val playerRight = player.x + 50
+                        val playerTop = height - 150f
+                        val playerBottom = height - 100f
+
+                        val enemyLeft = enemy.x - 50
+                        val enemyRight = enemy.x + 50
+                        val enemyTop = enemy.y - 50
+                        val enemyBottom = enemy.y + 50
+
+                        if (playerRight > enemyLeft && playerLeft < enemyRight &&
+                            playerBottom > enemyTop && playerTop < enemyBottom
+                        ) {
                             gameOver = true
+                        }
+                    }
+
+                    // Handle collisions between enemies
+                    for (i in 0 until enemies.size) {
+                        for (j in i + 1 until enemies.size) {
+                            enemies[i].handleCollisionWith(enemies[j])
                         }
                     }
 
@@ -152,6 +184,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // Increases the speed of all enemies by 10%
+        private fun increaseEnemySpeed() {
+            synchronized(enemies) {
+                enemies.forEach { enemy ->
+                    enemy.increaseSpeed(1.5f) // Pass the speed multiplier
+                }
+            }
+        }
+
+
 
         private fun drawGame(canvas: Canvas) {
             synchronized(enemies) {
@@ -245,6 +288,39 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            fun increaseSpeed(multiplier: Float) {
+                speedX *= multiplier
+                speedY *= multiplier
+
+                // Ensure speeds aren't too slow
+                if (speedX in -1f..1f) speedX = if (speedX < 0) -1.1f else 3f
+                if (speedY in -1f..1f) speedY = if (speedY < 0) -1.1f else 3f
+            }
+
+            fun handleCollisionWith(other: Enemy) {
+                val dx = other.x - x
+                val dy = other.y - y
+                val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+
+                if (distance < 100) {
+                    speedX = -speedX * 1.05f
+                    speedY = -speedY * 1.05f
+                    other.speedX = -other.speedX * 1.1f
+                    other.speedY = -other.speedY * 1.1f
+
+                    val overlap = 100 - distance
+                    val angle = kotlin.math.atan2(dy, dx)
+                    x -= overlap / 2 * kotlin.math.cos(angle)
+                    y -= overlap / 2 * kotlin.math.sin(angle)
+                    other.x += overlap / 2 * kotlin.math.cos(angle)
+                    other.y += overlap / 2 * kotlin.math.sin(angle)
+                }
+            }
+        }
+
+
+
+
             fun collidesWithPlayer(player: Player): Boolean {
                 val playerLeft = player.x - 50
                 val playerRight = player.x + 50
@@ -261,4 +337,3 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-}
