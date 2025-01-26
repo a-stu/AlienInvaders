@@ -40,6 +40,25 @@ class MainActivity : AppCompatActivity() {
             startGameLoop()
         }
 
+        private fun saveScores() {
+            val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
+            val editor = sharedPreferences.edit()
+
+            val highScore = sharedPreferences.getInt("highScore", 0)
+            if (score > highScore) {
+                editor.putInt("highScore", score)
+                editor.putString("highScoreDate", getCurrentDate())
+            }
+
+            editor.putInt("lastScore", score)
+            editor.putString("lastScoreDate", getCurrentDate())
+            editor.apply()
+        }
+
+        private fun getCurrentDate(): String {
+            val current = java.util.Calendar.getInstance()
+            return "${current.get(java.util.Calendar.MONTH) + 1}/${current.get(java.util.Calendar.DAY_OF_MONTH)}/${current.get(java.util.Calendar.YEAR)}"
+        }
         private fun startGameLoop() {
             gameLoopTimer.cancel()
             gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {
@@ -181,6 +200,11 @@ class MainActivity : AppCompatActivity() {
 
                     enemies.removeAll(enemiesToRemove)
                     if (enemies.isEmpty() && !gameOver) spawnEnemies()
+
+                    if (gameOver) {
+                        saveScores() // Save scores and timestamps when the game ends
+                        return
+                    }
                 }
             }
         }
@@ -336,4 +360,4 @@ class MainActivity : AppCompatActivity() {
                         playerBottom > enemyTop && playerTop < enemyBottom
             }
         }
-    }
+}

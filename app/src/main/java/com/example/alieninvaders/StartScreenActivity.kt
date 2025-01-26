@@ -12,6 +12,7 @@ import android.view.SurfaceView
 import androidx.appcompat.app.AppCompatActivity
 
 class StartScreenActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(StartScreenView(this))
@@ -20,13 +21,25 @@ class StartScreenActivity : AppCompatActivity() {
     inner class StartScreenView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
 
         private val paint = Paint()
+        private var highScore = 0
+        private var highScoreDate = ""
+        private var lastScore = 0
+        private var lastScoreDate = ""
 
         init {
             holder.addCallback(this)
+            loadScores()
+        }
+
+        private fun loadScores() {
+            val sharedPreferences = context.getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
+            highScore = sharedPreferences.getInt("highScore", 0)
+            highScoreDate = sharedPreferences.getString("highScoreDate", "N/A") ?: "N/A"
+            lastScore = sharedPreferences.getInt("lastScore", 0)
+            lastScoreDate = sharedPreferences.getString("lastScoreDate", "N/A") ?: "N/A"
         }
 
         override fun surfaceCreated(holder: SurfaceHolder) {
-            // Ensure drawing the start screen on creation
             Thread {
                 val canvas = holder.lockCanvas()
                 if (canvas != null) {
@@ -44,7 +57,7 @@ class StartScreenActivity : AppCompatActivity() {
 
         override fun onTouchEvent(event: MotionEvent?): Boolean {
             if (event?.action == MotionEvent.ACTION_DOWN) {
-                performClick() // Notify accessibility services
+                performClick()
                 onGameStart()
                 return true
             }
@@ -57,7 +70,6 @@ class StartScreenActivity : AppCompatActivity() {
         }
 
         private fun onGameStart() {
-            // Transition to MainActivity when the screen is tapped
             val intent = Intent(context, MainActivity::class.java)
             context.startActivity(intent)
         }
@@ -65,40 +77,56 @@ class StartScreenActivity : AppCompatActivity() {
         private fun drawScreen(canvas: Canvas) {
             canvas.drawColor(Color.BLACK)
 
-            // Draw the game title
+            // Game title
             paint.color = Color.WHITE
             paint.textSize = 100f
             paint.textAlign = Paint.Align.CENTER
             canvas.drawText("ALIEN INVADERS", (width / 2).toFloat(), (height / 4).toFloat(), paint)
 
-            // Draw the subtitle
+            // Subtitle
             paint.textSize = 50f
             canvas.drawText("by addison stuart", (width / 2).toFloat(), (height / 4 + 70).toFloat(), paint)
 
-            // Draw "Tap to Start" text
-            paint.textSize = 60f
-            canvas.drawText("-tap here to start-", (width / 2).toFloat(), (3 * height / 4).toFloat(), paint)
+            // Display Top Score if valid
+            var nextLineY = height / 2 - 50f // Start drawing scores
+            paint.textSize = 40f
+            if (highScore > 0 && highScoreDate != "N/A") {
+                canvas.drawText(
+                    "Top Score: $highScore ($highScoreDate)",
+                    (width / 2).toFloat(),
+                    nextLineY,
+                    paint
+                )
+                nextLineY += 50f // Move to the next line if top score is drawn
+            }
 
-            // Draw enemy blocks at the top
-            paint.color = Color.RED
-            val numEnemies = 5
-            val enemyWidth = 100
-            val spacing = 20 // Spacing between enemy blocks
-            val totalWidth = numEnemies * (enemyWidth + spacing) - spacing
-            val startX = (width - totalWidth) / 2
-
-            for (i in 0 until numEnemies) {
-                val left = startX + i * (enemyWidth + spacing)
-                canvas.drawRect(
-                    left.toFloat(),
-                    50f,
-                    (left + enemyWidth).toFloat(),
-                    150f,
+            // Display Last Score if valid
+            if (lastScore > 0 && lastScoreDate != "N/A") {
+                canvas.drawText(
+                    "Last Score: $lastScore ($lastScoreDate)",
+                    (width / 2).toFloat(),
+                    nextLineY,
                     paint
                 )
             }
 
-            // Draw the player block at the bottom
+            // "Tap to Start" text
+            paint.textSize = 60f
+            canvas.drawText("-tap here to start-", (width / 2).toFloat(), (3 * height / 4).toFloat(), paint)
+
+            // Enemy blocks
+            paint.color = Color.RED
+            val numEnemies = 5
+            val enemyWidth = 100
+            val spacing = 20
+            val totalWidth = numEnemies * (enemyWidth + spacing) - spacing
+            val startX = (width - totalWidth) / 2
+            for (i in 0 until numEnemies) {
+                val left = startX + i * (enemyWidth + spacing)
+                canvas.drawRect(left.toFloat(), 50f, (left + enemyWidth).toFloat(), 150f, paint)
+            }
+
+            // Player block
             paint.color = Color.GREEN
             val playerWidth = 200
             canvas.drawRect(
