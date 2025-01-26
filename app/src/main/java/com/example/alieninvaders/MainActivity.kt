@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         private var gameOver = false
         private var score = 0
         private var waveCount = 0
+        private var lastShotTime = 0L
         private var gameLoopThread: Thread? = null
         private var gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {}
 
@@ -78,8 +79,14 @@ class MainActivity : AppCompatActivity() {
                     (context as MainActivity).finish()
                 } else {
                     player.x = event.x
-                    synchronized(projectiles) {
-                        projectiles.add(Projectile(player.x, height.toFloat() - 200))
+                    val currentTime = System.currentTimeMillis()
+
+                    // Firing Speed: Check if enough time (500ms) has passed since the last shot
+                    if (currentTime - lastShotTime >= 500) {
+                        synchronized(projectiles) {
+                            projectiles.add(Projectile(player.x, height.toFloat() - 200))
+                        }
+                        lastShotTime = currentTime // Update the last shot time
                     }
                 }
             }
