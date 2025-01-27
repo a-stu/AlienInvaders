@@ -13,6 +13,8 @@ import android.view.SurfaceView
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.concurrent.fixedRateTimer
 import kotlin.random.Random
+import android.media.SoundPool
+import android.media.AudioAttributes
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,7 +24,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
-
         private val player = Player()
         private val projectiles = mutableListOf<Projectile>()
         private val enemies = mutableListOf<Enemy>()
@@ -34,8 +35,31 @@ class MainActivity : AppCompatActivity() {
         private var lastShotTime = 0L
         private var gameLoopThread: Thread? = null
         private var gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {}
+        private val gameOverSoundId: Int
+        private val soundPool: SoundPool
+        private val enemyDestroyedSoundId: Int
+        private val playerShotSoundIds = IntArray(10) // Array to hold player shot sound IDs
 
         init {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            soundPool = SoundPool.Builder()
+                .setMaxStreams(10) // Adjust based on how many simultaneous sounds you'd like
+                .setAudioAttributes(audioAttributes)
+                .build()
+
+            // Load sound files
+            enemyDestroyedSoundId = soundPool.load(context, R.raw.enemy_destroyed_sound, 1)
+            gameOverSoundId = soundPool.load(context, R.raw.game_over_sound, 1) // Load the game over sound
+
+            for (i in 1..10) {
+                val resId = context.resources.getIdentifier("player_shot_$i", "raw", context.packageName)
+                playerShotSoundIds[i - 1] = soundPool.load(context, resId, 1)
+            }
+
             holder.addCallback(this)
             startGameLoop()
         }
@@ -84,7 +108,9 @@ class MainActivity : AppCompatActivity() {
         override fun surfaceDestroyed(holder: SurfaceHolder) {
             running = false
             gameLoopTimer.cancel()
+            soundPool.release() // Release SoundPool resources
         }
+
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
 
@@ -100,12 +126,16 @@ class MainActivity : AppCompatActivity() {
                     player.x = event.x
                     val currentTime = System.currentTimeMillis()
 
-                    // Firing Speed: Check if enough time (500ms) has passed since the last shot
+                    // Firing Speed: Check if enough time (400ms) has passed since the last shot
                     if (currentTime - lastShotTime >= 400) {
                         synchronized(projectiles) {
                             projectiles.add(Projectile(player.x, height.toFloat() - 200))
                         }
                         lastShotTime = currentTime // Update the last shot time
+
+                        // Play a random player shot sound
+                        val randomSoundIndex = Random.nextInt(10) // Random number between 0 and 9
+                        soundPool.play(playerShotSoundIds[randomSoundIndex], 1f, 1f, 0, 0, 1f)
                     }
                 }
             }
@@ -166,6 +196,9 @@ class MainActivity : AppCompatActivity() {
                             enemiesToRemove.add(enemy)
                             score += 1
 
+                            // Play the enemy destroyed sound
+                            soundPool.play(enemyDestroyedSoundId, 1f, 1f, 0, 0, 1f)
+
                             // Increase enemy speed every 5 points
                             if (score % 5 == 0 && score > lastScoreCheckpoint) {
                                 lastScoreCheckpoint = score
@@ -188,6 +221,7 @@ class MainActivity : AppCompatActivity() {
                             playerBottom > enemyTop && playerTop < enemyBottom
                         ) {
                             gameOver = true
+                            soundPool.play(gameOverSoundId, 1f, 1f, 0, 0, 1f) // Play the game over sound
                         }
                     }
 
