@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -13,9 +14,35 @@ import androidx.appcompat.app.AppCompatActivity
 
 class StartScreenActivity : AppCompatActivity() {
 
+    private var mediaPlayer: MediaPlayer? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(StartScreenView(this))
+
+        // Initialize and play the start screen music
+        mediaPlayer = MediaPlayer.create(this, R.raw.start_screen_music_loop)
+        mediaPlayer?.isLooping = true
+        mediaPlayer?.start()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Pause music when the app is minimized or loses focus
+        mediaPlayer?.pause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Resume music when the app regains focus
+        mediaPlayer?.start()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Release the MediaPlayer to free resources
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     inner class StartScreenView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
@@ -70,6 +97,11 @@ class StartScreenActivity : AppCompatActivity() {
         }
 
         private fun onGameStart() {
+            // Stop the music when starting the game
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = null
+
             val intent = Intent(context, MainActivity::class.java)
             context.startActivity(intent)
         }
