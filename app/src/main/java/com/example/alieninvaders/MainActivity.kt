@@ -15,6 +15,9 @@ import kotlin.concurrent.fixedRateTimer
 import kotlin.random.Random
 import android.media.SoundPool
 import android.media.AudioAttributes
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,6 +43,7 @@ class MainActivity : AppCompatActivity() {
         private val soundPool: SoundPool
         private val enemyDestroyedSoundId: Int
         private val playerShotSoundIds = IntArray(10) // Array to hold player shot sound IDs
+        private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars_dark)
 
         init {
             val audioAttributes = AudioAttributes.Builder()
@@ -276,9 +280,16 @@ class MainActivity : AppCompatActivity() {
 
 
         private fun drawGame(canvas: Canvas) {
+
+            // Draw the stars background - NO SCALING
+            if (starsBackground != null) {
+                canvas.drawBitmap(starsBackground, 0f, 0f, null) // Draw at top-left corner
+            } else {
+                canvas.drawColor(Color.BLACK) // Fallback
+            }
+
             synchronized(enemies) {
                 synchronized(projectiles) {
-                    canvas.drawColor(Color.BLACK)
 
                     if (gameOver) {
                         // Draw "GAME OVER" text
