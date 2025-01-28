@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
         private var waveCount = 0
         private var lastShotTime = 0L
         private var gameLoopThread: Thread? = null
+        private var isPaused = false
         private var gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {}
         private val gameOverSoundId: Int
         private val soundPool: SoundPool
@@ -116,14 +117,33 @@ class MainActivity : AppCompatActivity() {
 
         override fun onTouchEvent(event: MotionEvent?): Boolean {
             if (event?.action == MotionEvent.ACTION_DOWN) {
+                val touchX = event.x
+                val touchY = event.y
+
+                // Check if the pause/play button was tapped
+                val buttonXStart = width - 120f
+                val buttonXEnd = width - 20f
+                val buttonYStart = 20f
+                val buttonYEnd = 120f
+
+                if (touchX in buttonXStart..buttonXEnd && touchY in buttonYStart..buttonYEnd) {
+                    isPaused = !isPaused
+                    if (isPaused) {
+                        gameLoopTimer.cancel() // Pause the game loop
+                    } else {
+                        startGameLoop() // Resume the game loop
+                    }
+                    return true // Exit touch handling here
+                }
+
                 if (gameOver) {
                     running = false
                     gameLoopTimer.cancel()
                     val intent = Intent(context, StartScreenActivity::class.java)
                     context.startActivity(intent)
                     (context as MainActivity).finish()
-                } else {
-                    player.x = event.x
+                } else if (!isPaused) {
+                    player.x = touchX
                     val currentTime = System.currentTimeMillis()
 
                     // Firing Speed: Check if enough time (400ms) has passed since the last shot
@@ -141,6 +161,7 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         }
+
 
         private fun resetGame() {
             synchronized(enemies) { enemies.clear() }
@@ -304,13 +325,36 @@ class MainActivity : AppCompatActivity() {
                         canvas.drawRect(it.x - 50, it.y - 50, it.x + 50, it.y + 50, paint)
                     }
 
+                    // Draw the score
                     paint.color = Color.WHITE
                     paint.textSize = 60f
                     paint.typeface = Typeface.MONOSPACE
                     canvas.drawText("Score: $score", 20f, 70f, paint)
+
+                    // Draw the pause/play button
+                    val buttonPaint = Paint().apply { color = Color.WHITE }
+                    val centerX = width - 70f
+                    val centerY = 70f
+
+                    if (isPaused) {
+                        // Draw play symbol (triangle)
+                        val path = android.graphics.Path().apply {
+                            moveTo(centerX - 20f, centerY - 30f)
+                            lineTo(centerX - 20f, centerY + 30f)
+                            lineTo(centerX + 30f, centerY)
+                            close()
+                        }
+                        canvas.drawPath(path, buttonPaint)
+                    } else {
+                        // Draw pause symbol (two bars)
+                        canvas.drawRect(centerX - 30f, centerY - 30f, centerX - 10f, centerY + 30f, buttonPaint)
+                        canvas.drawRect(centerX + 10f, centerY - 30f, centerX + 30f, centerY + 30f, buttonPaint)
+                    }
+
                 }
             }
         }
+
 
 
         inner class Player(var x: Float = 0f)
@@ -395,3 +439,4 @@ class MainActivity : AppCompatActivity() {
             }
         }
 }
+
