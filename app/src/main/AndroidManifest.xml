@@ -16,6 +16,8 @@
         <!-- Start Screen Activity -->
         <activity
             android:name=".StartScreenActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -26,6 +28,8 @@
         <!-- Main Game Activity -->
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             android:exported="false" />
     </application>
 </manifest>
