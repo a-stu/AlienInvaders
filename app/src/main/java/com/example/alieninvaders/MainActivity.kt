@@ -17,7 +17,7 @@ import android.media.SoundPool
 import android.media.AudioAttributes
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -31,6 +31,13 @@ class MainActivity : AppCompatActivity() {
         private val projectiles = mutableListOf<Projectile>()
         private val enemies = mutableListOf<Enemy>()
         private val paint = Paint()
+        private val originalPlayerBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.raw.player_ship)
+        private val playerBitmap: Bitmap = Bitmap.createScaledBitmap(originalPlayerBitmap,
+            originalPlayerBitmap.width / 30, originalPlayerBitmap.height / 30, true)
+        private val originalEnemyBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.raw.enemy_ship)
+        private val enemyBitmap: Bitmap = Bitmap.createScaledBitmap(originalEnemyBitmap,
+            originalEnemyBitmap.width / 30, originalEnemyBitmap.height / 30, true)
+        private var resetButtonRect = android.graphics.RectF()
         private var running = true
         private var gameOver = false
         private var score = 0
@@ -43,7 +50,7 @@ class MainActivity : AppCompatActivity() {
         private val soundPool: SoundPool
         private val enemyDestroyedSoundId: Int
         private val playerShotSoundIds = IntArray(10) // Array to hold player shot sound IDs
-        private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars_dark)
+        private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars__very_dark)
 
         init {
             val audioAttributes = AudioAttributes.Builder()
@@ -68,6 +75,7 @@ class MainActivity : AppCompatActivity() {
             holder.addCallback(this)
             startGameLoop()
         }
+
 
         private fun saveScores() {
             val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
@@ -141,15 +149,18 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (gameOver) {
-                    running = false
-                    gameLoopTimer.cancel()
-                    val intent = Intent(context, StartScreenActivity::class.java)
-                    context.startActivity(intent)
-                    (context as MainActivity).finish()
-                } else if (!isPaused) {
-                    player.x = touchX
-                    val currentTime = System.currentTimeMillis()
+                    if (resetButtonRect.contains(touchX, touchY)) {
+                        running = false
+                        gameLoopTimer.cancel()
+                        val intent = Intent(context, StartScreenActivity::class.java)
+                        context.startActivity(intent)
+                        (context as MainActivity).finish()
+                    }
+                } else { // <-- SHOOTING SHOULD HAPPEN WHEN THE GAME IS RUNNING
 
+                    player.x = touchX.coerceIn(0f + playerBitmap.width/2, width.toFloat() - playerBitmap.width/2) // Update player's x position *immediately*
+
+                    val currentTime = System.currentTimeMillis()
                     // Firing Speed: Check if enough time (400ms) has passed since the last shot
                     if (currentTime - lastShotTime >= 400) {
                         synchronized(projectiles) {
@@ -307,33 +318,37 @@ class MainActivity : AppCompatActivity() {
                         val scoreWidth = paint.measureText(scoreText)
                         canvas.drawText(scoreText, (width - scoreWidth) / 2, height / 2f + 100, paint)
 
-                        // Draw "-tap here to reset-" text
+// Draw "-tap here to reset-" text with bounding box
                         paint.color = Color.WHITE
                         val resetText = "-tap here to reset-"
                         val resetWidth = paint.measureText(resetText)
-                        canvas.drawText(resetText, (width - resetWidth) / 2, height / 2f + 200, paint)
+                        val resetX = (width - resetWidth) / 2
+                        val resetY = height / 2f + 200
+                        canvas.drawText(resetText, resetX, resetY, paint)
+
+// Define reset button bounding box
+                        val resetPadding = 20f
+                        resetButtonRect = android.graphics.RectF(
+                            resetX - resetPadding,
+                            resetY - paint.textSize - resetPadding,
+                            resetX + resetWidth + resetPadding,
+                            resetY + resetPadding
+                        )
 
                         return
                     }
 
-                    // Normal game drawing
-                    paint.color = Color.GREEN
-                    canvas.drawRect(
-                        player.x - 50,
-                        height - 150f,
-                        player.x + 50,
-                        height - 100f,
-                        paint
-                    )
+                    // Draw player
+                    canvas.drawBitmap(playerBitmap, player.x - playerBitmap.width / 2, height - 150f, null)
 
                     paint.color = Color.YELLOW
                     projectiles.forEach {
                         canvas.drawRect(it.x - 10, it.y - 20, it.x + 10, it.y, paint)
                     }
 
-                    paint.color = Color.RED
-                    enemies.forEach {
-                        canvas.drawRect(it.x - 50, it.y - 50, it.x + 50, it.y + 50, paint)
+                    // Draw enemies
+                    enemies.forEach { enemy ->
+                        canvas.drawBitmap(enemyBitmap, enemy.x - enemyBitmap.width / 2, enemy.y - enemyBitmap.height / 2, null)
                     }
 
                     // Draw the score
@@ -434,20 +449,19 @@ class MainActivity : AppCompatActivity() {
 
 
 
-            fun collidesWithPlayer(player: Player): Boolean {
-                val playerLeft = player.x - 50
-                val playerRight = player.x + 50
-                val playerTop = height - 150f
-                val playerBottom = height - 100f
+        fun collidesWithPlayer(player: Player): Boolean {
+            val playerLeft = player.x - 50
+            val playerRight = player.x + 50
+            val playerTop = height - 150f
+            val playerBottom = height - 100f
 
-                val enemyLeft = x - 50
-                val enemyRight = x + 50
-                val enemyTop = y - 50
-                val enemyBottom = y + 50
+            val enemyLeft = x - 50
+            val enemyRight = x + 50
+            val enemyTop = y - 50
+            val enemyBottom = y + 50
 
-                return playerRight > enemyLeft && playerLeft < enemyRight &&
-                        playerBottom > enemyTop && playerTop < enemyBottom
-            }
+            return playerRight > enemyLeft && playerLeft < enemyRight &&
+                    playerBottom > enemyTop && playerTop < enemyBottom
         }
+    }
 }
-
