@@ -53,7 +53,7 @@ class StartScreenActivity : AppCompatActivity() {
         private var lastScore = 0
         private var lastScoreDate = ""
         private val titleSplash = BitmapFactory.decodeResource(resources, R.drawable.title_splash)
-        private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars_dark) // Load background
+        private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars__very_dark) // Load background
 
 
         init {
