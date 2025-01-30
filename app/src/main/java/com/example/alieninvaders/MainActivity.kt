@@ -17,14 +17,17 @@ import android.media.SoundPool
 import android.media.AudioAttributes
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.app.ActivityManager
+
 
 
 class MainActivity : AppCompatActivity() {
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+        override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(GameView(this))
     }
+
 
     inner class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
         private val player = Player()
@@ -46,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         private var gameLoopThread: Thread? = null
         private var isPaused = false
         private var gameLoopTimer = fixedRateTimer("gameLoop", initialDelay = 0, period = 16) {}
+        private var wasRunning = false // Track game state before background
         private val gameOverSoundId: Int
         private val soundPool: SoundPool
         private val enemyDestroyedSoundId: Int
@@ -103,6 +107,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        private fun isAppReallyInBackground(): Boolean {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val appProcesses = activityManager.runningAppProcesses ?: return true
+
+            val packageName = packageName
+            for (process in appProcesses) {
+                if (process.processName == packageName) {
+                    return process.importance != ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                }
+            }
+            return true
+        }
+
+
         override fun surfaceCreated(holder: SurfaceHolder) {
             player.x = width / 2f
             gameLoopThread = Thread {
@@ -123,6 +141,7 @@ class MainActivity : AppCompatActivity() {
             gameLoopTimer.cancel()
             soundPool.release() // Release SoundPool resources
         }
+
 
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
@@ -156,7 +175,13 @@ class MainActivity : AppCompatActivity() {
                         context.startActivity(intent)
                         (context as MainActivity).finish()
                     }
-                } else { // <-- SHOOTING SHOULD HAPPEN WHEN THE GAME IS RUNNING
+                    return true
+                }
+
+                // **Prevent shooting if the game is paused**
+                if (isPaused) {
+                    return true // Do nothing if paused
+                }
 
                     player.x = touchX.coerceIn(0f + playerBitmap.width/2, width.toFloat() - playerBitmap.width/2) // Update player's x position *immediately*
 
@@ -173,10 +198,8 @@ class MainActivity : AppCompatActivity() {
                         soundPool.play(playerShotSoundIds[randomSoundIndex], 1f, 1f, 0, 0, 1f)
                     }
                 }
-            }
             return true
         }
-
 
         private fun resetGame() {
             synchronized(enemies) { enemies.clear() }
