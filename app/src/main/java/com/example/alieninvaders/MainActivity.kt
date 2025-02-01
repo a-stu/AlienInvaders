@@ -54,6 +54,8 @@ class MainActivity : AppCompatActivity() {
         private val enemyDestroyedSoundId: Int
         private val playerShotSoundIds = IntArray(10) // Array to hold player shot sound IDs
         private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars__very_dark)
+        private val explosions = mutableListOf<Explosion>()
+        private val explosionBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.raw.explosion)
 
         init {
             val audioAttributes = AudioAttributes.Builder()
@@ -254,6 +256,9 @@ class MainActivity : AppCompatActivity() {
                             enemiesToRemove.add(enemy)
                             score += 1
 
+                            // Spawn explosion at enemy's position
+                            explosions.add(Explosion(enemy.x, enemy.y))
+
                             // Play the enemy destroyed sound
                             soundPool.play(enemyDestroyedSoundId, 1f, 1f, 0, 0, 1f)
 
@@ -371,6 +376,14 @@ class MainActivity : AppCompatActivity() {
                     // Draw enemies
                     enemies.forEach { enemy ->
                         canvas.drawBitmap(enemyBitmap, enemy.x - enemyBitmap.width / 2, enemy.y - enemyBitmap.height / 2, null)
+                        // Draw and update explosions
+                        val iterator = explosions.iterator()
+                        while (iterator.hasNext()) {
+                            val explosion = iterator.next()
+                            explosion.draw(canvas)
+                            if (explosion.update()) iterator.remove() // Remove explosion when done
+                        }
+
                     }
 
                     // Draw the score
@@ -467,8 +480,43 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        inner class Explosion(var x: Float, var y: Float) {
+            private var startTime = System.currentTimeMillis()
+            private var rotation = Random.nextInt(360) // Random rotation angle
+            private var scale = 0.1f // Start small
+            private var opacity = 255 // Fully visible
 
+            fun update(): Boolean {
+                val elapsed = System.currentTimeMillis() - startTime
 
+                return when {
+                    elapsed < 300 -> { // First second: grow from 10% to 50%
+                        scale = 0.1f + (elapsed / 300f) * 0.1f
+                        opacity = 255
+                        false
+                    }
+                    elapsed < 600 -> { // Second second: shrink & fade
+                        scale = 0.1f - ((elapsed - 300) / 300f) * 0.1f
+                        opacity = (255 * (1 - (elapsed - 300) / 300f)).toInt()
+                        false
+                    }
+                    else -> true // Remove after 2 seconds
+                }
+            }
+
+            fun draw(canvas: Canvas) {
+                val paint = Paint().apply { alpha = opacity }
+                val explosionSize = explosionBitmap.width * scale
+
+                val matrix = android.graphics.Matrix().apply {
+                    postScale(scale, scale)
+                    postRotate(rotation.toFloat(), explosionSize / 2, explosionSize / 2)
+                    postTranslate(x - explosionSize / 2, y - explosionSize / 2)
+                }
+
+                canvas.drawBitmap(explosionBitmap, matrix, paint)
+            }
+        }
 
 
         fun collidesWithPlayer(player: Player): Boolean {
