@@ -28,7 +28,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(GameView(this))
     }
 
-
     inner class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
         private val player = Player()
         private val projectiles = mutableListOf<Projectile>()
@@ -487,4 +486,31 @@ class MainActivity : AppCompatActivity() {
                     playerBottom > enemyTop && playerTop < enemyBottom
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+
+        // Check if the activity was previously running before minimizing
+        val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
+        val wasMinimized = sharedPreferences.getBoolean("wasMinimized", false)
+
+        if (wasMinimized) {
+            // Reset the flag
+            sharedPreferences.edit().putBoolean("wasMinimized", false).apply()
+
+            // Redirect to StartScreenActivity
+            val intent = Intent(this, StartScreenActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            finish()
+        }
+    }
+    override fun onPause() {
+        super.onPause()
+
+        // Mark that the game was minimized
+        val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putBoolean("wasMinimized", true).apply()
+    }
+
 }

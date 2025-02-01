@@ -104,10 +104,15 @@ class StartScreenActivity : AppCompatActivity() {
             mediaPlayer?.release()
             mediaPlayer = null
 
+            // Clear wasMinimized flag when starting a new game
+            val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
+            sharedPreferences.edit().putBoolean("wasMinimized", false).apply()
+
             val intent = Intent(context, MainActivity::class.java)
             context.startActivity(intent)
             (context as StartScreenActivity).finish()
         }
+
 
         private fun drawScreen(canvas: Canvas) {
 
