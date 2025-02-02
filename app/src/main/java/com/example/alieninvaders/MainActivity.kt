@@ -1,11 +1,16 @@
 package com.example.alieninvaders
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -13,11 +18,6 @@ import android.view.SurfaceView
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.concurrent.fixedRateTimer
 import kotlin.random.Random
-import android.media.SoundPool
-import android.media.AudioAttributes
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.app.ActivityManager
 
 
 
@@ -257,17 +257,40 @@ class MainActivity : AppCompatActivity() {
                 val availableSpace = width - (numEnemies * enemyWidth)
                 val spacing = availableSpace / (numEnemies - 1)
 
+                val tempEnemies = mutableListOf<Enemy>()
+
+                // Only track enemy positions in wave 1
+                val positionCount = if (waveCount == 0) mutableMapOf<Float, Int>() else null
+
                 for (i in 0 until numEnemies) {
                     val centerX = spacing * i + enemyWidth / 2 + i * enemyWidth
                     val y = Random.nextFloat() * (height / 3 - 150) + 75
                     val enemy = Enemy(centerX, y, 50f, width - 50f)
-                    enemies.add(enemy)
+
+                    tempEnemies.add(enemy)
+
+                    // Only track positions in wave 1
+                    if (waveCount == 0) {
+                        val roundedX = centerX.toInt().toFloat()
+                        positionCount!![roundedX] = positionCount.getOrDefault(roundedX, 0) + 1
+                    }
                 }
+
+                // If we're on wave 1, check for clustering
+                if (waveCount == 0 && positionCount!!.values.any { it >= 4 }) {
+                    waveCount++  // Force a respawn
+                    spawnEnemies() // Try again
+                    return
+                }
+
+                // Otherwise, finalize the wave
+                enemies.addAll(tempEnemies)
 
                 waveCount += 1 // Increment wave count
                 increaseEnemySpeed() // Apply the speed increase to the new wave
             }
         }
+
 
 
 
