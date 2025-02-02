@@ -39,6 +39,18 @@ class MainActivity : AppCompatActivity() {
         private val originalEnemyBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.raw.enemy_ship)
         private val enemyBitmap: Bitmap = Bitmap.createScaledBitmap(originalEnemyBitmap,
             originalEnemyBitmap.width / 30, originalEnemyBitmap.height / 30, true)
+
+        // Define tutorial image and scaling
+        private val tutorialBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.tutorial)
+        private val TUTORIAL_SCALE = 0.4f // 50% of original size
+
+        // Scale the tutorial image based on the factor
+        private val scaledTutorialBitmap: Bitmap = Bitmap.createScaledBitmap(
+            tutorialBitmap,
+            (tutorialBitmap.width * TUTORIAL_SCALE).toInt(),
+            (tutorialBitmap.height * TUTORIAL_SCALE).toInt(),
+            true
+        )
         private var resetButtonRect = android.graphics.RectF()
         private var running = true
         private var gameOver = false
@@ -55,9 +67,19 @@ class MainActivity : AppCompatActivity() {
         private val playerShotSoundIds = IntArray(10) // Array to hold player shot sound IDs
         private val starsBackground = BitmapFactory.decodeResource(resources, R.drawable.stars__very_dark)
         private val explosions = mutableListOf<Explosion>()
-        private val explosionBitmap: Bitmap = BitmapFactory.decodeResource(resources, R.raw.explosion)
+        private val explosionBitmaps = listOf(
+            BitmapFactory.decodeResource(resources, R.raw.explosion),
+            BitmapFactory.decodeResource(resources, R.raw.explosion_1),
+            BitmapFactory.decodeResource(resources, R.raw.explosion_2)
+        )
 
-        init {
+        private var tutorialActive = false
+        private var initialPlayerX = -1f
+        private var tutorialTimer: Thread? = null
+
+
+
+    init {
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_GAME)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -123,7 +145,16 @@ class MainActivity : AppCompatActivity() {
 
 
         override fun surfaceCreated(holder: SurfaceHolder) {
-            player.x = width / 2f
+            player.x = width / 2f // Ensure the player starts centered
+            initialPlayerX = player.x // Save starting position
+
+            // Start a delayed task to check for movement after 4 seconds
+            postDelayed({
+                if (Math.abs(player.x - initialPlayerX) < playerBitmap.width) {
+                    tutorialActive = true // Show tutorial if not moved enough
+                }
+            }, 4000) // Delay of 4 seconds
+
             gameLoopThread = Thread {
                 while (running) {
                     val canvas = holder.lockCanvas()
@@ -157,6 +188,14 @@ class MainActivity : AppCompatActivity() {
                 val buttonXEnd = width - 20f
                 val buttonYStart = 20f
                 val buttonYEnd = 120f
+
+                player.x = touchX.coerceIn(playerBitmap.width / 2f, width - playerBitmap.width / 2f)
+
+// Check if player moved at least one ship width
+                if (tutorialActive && Math.abs(player.x - initialPlayerX) >= playerBitmap.width) {
+                    tutorialActive = false // Hide tutorial
+                }
+
 
                 if (touchX in buttonXStart..buttonXEnd && touchY in buttonYStart..buttonYEnd) {
                     isPaused = !isPaused
@@ -329,28 +368,50 @@ class MainActivity : AppCompatActivity() {
             synchronized(enemies) {
                 synchronized(projectiles) {
 
+                    // Draw tutorial graphic if active
+
+// Draw the scaled tutorial image
+                    if (tutorialActive) {
+                        val tutorialX = (player.x + width) / 2 - scaledTutorialBitmap.width / 2 - 400f
+                        val tutorialY = height - 400f // Align with player
+                        canvas.drawBitmap(scaledTutorialBitmap, tutorialX, tutorialY, null)
+                    }
+
+
+
                     if (gameOver) {
-                        // Draw "GAME OVER" text
-                        paint.color = Color.RED
-                        paint.textSize = 100f
-                        paint.typeface = Typeface.DEFAULT_BOLD
-                        val gameOverText = "GAME OVER"
-                        val gameOverWidth = paint.measureText(gameOverText)
-                        canvas.drawText(gameOverText, (width - gameOverWidth) / 2, height / 2f, paint)
+                        // Load the game over splash image
+                        val gameOverSplashBitmap = BitmapFactory.decodeResource(resources, R.drawable.game_over_splash);
+
+                        // Define the scaling factor (e.g., 0.5 for 50%, 0.75 for 75%)
+                        val scalingFactor = 0.45f // You can adjust this value as needed
+
+                        // Calculate the scaled dimensions
+                        val scaledWidth = gameOverSplashBitmap.width * scalingFactor;
+                        val scaledHeight = gameOverSplashBitmap.height * scalingFactor;
+
+                        // Create a scaled bitmap
+                        val scaledBitmap = Bitmap.createScaledBitmap(gameOverSplashBitmap, scaledWidth.toInt(), scaledHeight.toInt(), true);
+
+                        // Draw the scaled game over splash image centered on the screen
+                        val canvasCenterX = width / 2f;
+                        val canvasCenterY = height / 2f - 200
+                        canvas.drawBitmap(scaledBitmap, canvasCenterX - scaledWidth / 2f, canvasCenterY - scaledHeight / 2f, null);
+
 
                         // Draw "Score: X" text
                         paint.color = Color.YELLOW
                         paint.textSize = 50f
                         val scoreText = "Score: $score"
                         val scoreWidth = paint.measureText(scoreText)
-                        canvas.drawText(scoreText, (width - scoreWidth) / 2, height / 2f + 100, paint)
+                        canvas.drawText(scoreText, (width - scoreWidth) / 2, height / 2f + 300, paint)
 
 // Draw "-tap here to reset-" text with bounding box
                         paint.color = Color.WHITE
                         val resetText = "-tap here to reset-"
                         val resetWidth = paint.measureText(resetText)
                         val resetX = (width - resetWidth) / 2
-                        val resetY = height / 2f + 200
+                        val resetY = height / 2f + 400
                         canvas.drawText(resetText, resetX, resetY, paint)
 
 // Define reset button bounding box
@@ -486,21 +547,24 @@ class MainActivity : AppCompatActivity() {
             private var scale = 0.1f // Start small
             private var opacity = 255 // Fully visible
 
+            // Randomly select an explosion bitmap from the preloaded ones
+            private val explosionBitmap = explosionBitmaps[Random.nextInt(explosionBitmaps.size)]
+
             fun update(): Boolean {
                 val elapsed = System.currentTimeMillis() - startTime
 
                 return when {
-                    elapsed < 300 -> { // First second: grow from 10% to 50%
+                    elapsed < 300 -> { // Grow phase
                         scale = 0.1f + (elapsed / 300f) * 0.1f
                         opacity = 255
                         false
                     }
-                    elapsed < 600 -> { // Second second: shrink & fade
+                    elapsed < 600 -> { // Shrink & fade phase
                         scale = 0.1f - ((elapsed - 300) / 300f) * 0.1f
                         opacity = (255 * (1 - (elapsed - 300) / 300f)).toInt()
                         false
                     }
-                    else -> true // Remove after 2 seconds
+                    else -> true // Remove after 600ms
                 }
             }
 
@@ -517,6 +581,7 @@ class MainActivity : AppCompatActivity() {
                 canvas.drawBitmap(explosionBitmap, matrix, paint)
             }
         }
+
 
 
         fun collidesWithPlayer(player: Player): Boolean {
