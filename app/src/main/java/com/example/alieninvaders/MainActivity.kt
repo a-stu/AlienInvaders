@@ -25,8 +25,11 @@ class MainActivity : AppCompatActivity() {
 
         override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(GameView(this))
-    }
+        gameView = GameView(this) // Initialize GameView
+        setContentView(gameView)
+        }
+
+    private lateinit var gameView: GameView // Store reference to GameView
 
     inner class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
         private val player = Player()
@@ -76,10 +79,12 @@ class MainActivity : AppCompatActivity() {
         private var tutorialActive = false
         private var initialPlayerX = -1f
         private var tutorialTimer: Thread? = null
+        private var savedPlayerX: Float = -1f
 
 
 
-    init {
+
+        init {
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_GAME)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -103,6 +108,15 @@ class MainActivity : AppCompatActivity() {
             startGameLoop()
         }
 
+        fun savePlayerPosition() {
+            savedPlayerX = player.x
+        }
+
+        fun restorePlayerPosition() {
+            if (savedPlayerX != -1f) {
+                player.x = savedPlayerX
+            }
+        }
 
         private fun saveScores() {
             val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
@@ -145,7 +159,12 @@ class MainActivity : AppCompatActivity() {
 
 
         override fun surfaceCreated(holder: SurfaceHolder) {
-            player.x = width / 2f // Ensure the player starts centered
+            if (savedPlayerX == -1f) {
+                player.x = width / 2f // ✅ Only center the player on first start, NOT after pause
+            } else {
+                restorePlayerPosition() // ✅ Restore saved position if available
+            }
+
             initialPlayerX = player.x // Save starting position
 
             // Start a delayed task to check for movement after 4 seconds
@@ -189,24 +208,35 @@ class MainActivity : AppCompatActivity() {
                 val buttonYStart = 20f
                 val buttonYEnd = 120f
 
+                if (touchX in buttonXStart..buttonXEnd && touchY in buttonYStart..buttonYEnd) {
+                    if (!isPaused) {
+                        savePlayerPosition() // ✅ Save player position before pausing
+                    }
+                    isPaused = !isPaused
+
+                    if (isPaused) {
+                        gameLoopTimer.cancel() // ✅ Pause the game loop
+                    } else {
+                        restorePlayerPosition() // ✅ Restore player's exact position when unpausing
+                        startGameLoop() // Resume the game loop
+                    }
+                    return true // ✅ Exit touch handling here to prevent unintended actions
+                }
+
+                // ✅ Prevent movement and shooting if the game is paused
+                if (isPaused) {
+                    return true
+                }
+
+                // Allow player movement only if the game is not paused
                 player.x = touchX.coerceIn(playerBitmap.width / 2f, width - playerBitmap.width / 2f)
 
-// Check if player moved at least one ship width
+                // Check if player moved at least one ship width
                 if (tutorialActive && Math.abs(player.x - initialPlayerX) >= playerBitmap.width) {
                     tutorialActive = false // Hide tutorial
                 }
 
-
-                if (touchX in buttonXStart..buttonXEnd && touchY in buttonYStart..buttonYEnd) {
-                    isPaused = !isPaused
-                    if (isPaused) {
-                        gameLoopTimer.cancel() // Pause the game loop
-                    } else {
-                        startGameLoop() // Resume the game loop
-                    }
-                    return true // Exit touch handling here
-                }
-
+                // If the game is over, check if reset button was tapped
                 if (gameOver) {
                     if (resetButtonRect.contains(touchX, touchY)) {
                         running = false
@@ -218,26 +248,19 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
 
-                // **Prevent shooting if the game is paused**
-                if (isPaused) {
-                    return true // Do nothing if paused
-                }
-
-                    player.x = touchX.coerceIn(0f + playerBitmap.width/2, width.toFloat() - playerBitmap.width/2) // Update player's x position *immediately*
-
-                    val currentTime = System.currentTimeMillis()
-                    // Firing Speed: Check if enough time (400ms) has passed since the last shot
-                    if (currentTime - lastShotTime >= 400) {
-                        synchronized(projectiles) {
-                            projectiles.add(Projectile(player.x, height.toFloat() - 200))
-                        }
-                        lastShotTime = currentTime // Update the last shot time
-
-                        // Play a random player shot sound
-                        val randomSoundIndex = Random.nextInt(10) // Random number between 0 and 9
-                        soundPool.play(playerShotSoundIds[randomSoundIndex], 1f, 1f, 0, 0, 1f)
+                val currentTime = System.currentTimeMillis()
+                // Firing Speed: Check if enough time (400ms) has passed since the last shot
+                if (currentTime - lastShotTime >= 400) {
+                    synchronized(projectiles) {
+                        projectiles.add(Projectile(player.x, height.toFloat() - 200))
                     }
+                    lastShotTime = currentTime // Update the last shot time
+
+                    // Play a random player shot sound
+                    val randomSoundIndex = Random.nextInt(10) // Random number between 0 and 9
+                    soundPool.play(playerShotSoundIds[randomSoundIndex], 1f, 1f, 0, 0, 1f)
                 }
+            }
             return true
         }
 
@@ -298,6 +321,8 @@ class MainActivity : AppCompatActivity() {
 
         private fun updateGame() {
             if (gameOver) return
+
+            if (gameOver || isPaused) return // Exit if game is over or paused
 
             synchronized(enemies) {
                 synchronized(projectiles) {
@@ -625,16 +650,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        gameView.restorePlayerPosition() // ✅ Restore player position before resuming
 
-        // Check if the activity was previously running before minimizing
         val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
         val wasMinimized = sharedPreferences.getBoolean("wasMinimized", false)
 
         if (wasMinimized) {
-            // Reset the flag
             sharedPreferences.edit().putBoolean("wasMinimized", false).apply()
 
-            // Redirect to StartScreenActivity
             val intent = Intent(this, StartScreenActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
@@ -643,8 +666,8 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onPause() {
         super.onPause()
+        gameView.savePlayerPosition() // ✅ Save the player's X position
 
-        // Mark that the game was minimized
         val sharedPreferences = getSharedPreferences("AlienInvadersPrefs", Context.MODE_PRIVATE)
         sharedPreferences.edit().putBoolean("wasMinimized", true).apply()
     }
